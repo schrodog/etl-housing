@@ -24,8 +24,10 @@ echo "import lookup"
 # import crime data
 crimedir="$dir/2016-12"
 crimedir2="$dir/2019-12"
+crimedir3="$dir/2020-08"
 
-sql2="insert ignore into crime_tmp (ct,lsoa,years) select count(*) ct, lsoa, left(max(months),4) from test3.raw_crime rc where lsoa != '' group by lsoa; truncate table raw_crime;"
+sql2="insert ignore into crime_tmp (ct,lsoa,years) select count(*)/12.0 ct, lsoa, left(max(months),4) from test3.raw_crime rc where lsoa != '' group by lsoa; truncate table raw_crime; "
+sql3="insert ignore into crime_tmp (ct,lsoa,years) select count(*)/8.0 ct, lsoa, left(max(months),4) from test3.raw_crime rc where lsoa != '' group by lsoa; truncate table raw_crime; "
 
 for year in {2011..2016}; do
   for dirs in $crimedir/$year*; do
@@ -48,6 +50,15 @@ for year in {2017..2019}; do
   done
   mysql -B test3 -h 127.0.0.1 -uroot -proot -P3307 -e "$sql2"
 done
+
+for dirs in $crimedir3/2020*; do
+  for file in $dirs/*.csv; do
+    sql="load data local infile '$file' into table raw_crime fields terminated by ',' enclosed by '\"' lines terminated by '\n' ignore 1 lines (@d,months,@d,@d,@d,@d,@d,lsoa)"
+    mysql -B test3 -h 127.0.0.1 -uroot -proot -P3307 --local-infile=1 -e "$sql"
+    echo $file
+  done
+done
+mysql -B test3 -h 127.0.0.1 -uroot -proot -P3307 -e "$sql3"
 
 echo "import crime data"
 

@@ -18,3 +18,5 @@ unittests.cfg
 
 tmp/
 *.code-workspace
+
+.vscode

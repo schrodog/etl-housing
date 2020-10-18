@@ -68,12 +68,6 @@ CREATE TABLE IF NOT EXISTS test3.`house_tmp` (
   `district` varchar(60) DEFAULT NULL,
   `county` varchar(60) DEFAULT NULL,
   `sector` char(6) DEFAULT NULL,
-  `timeID` int DEFAULT NULL,
-  `locationID` int DEFAULT NULL,
-  `environment` varchar(6) DEFAULT NULL,
-  `isPark` tinyint(1) DEFAULT NULL,
-  `country` enum('ENGLAND','WALES','SCOTLAND','NORTHERN IRELAND','CHANNEL ISLANDS','ISLE OF MAN') DEFAULT NULL,
-   `crime` int DEFAULT '-1',
   PRIMARY KEY (`id`),
   KEY `dt` (`dates`),
   KEY k1 (postcode)
@@ -124,6 +118,11 @@ CREATE TABLE IF NOT EXISTS house.`Sales` (
   `types` enum('D','S','T','F','O') DEFAULT NULL,
   `age` enum('Y','N') DEFAULT NULL,
   `duration` enum('F','L') DEFAULT NULL,
+  `isPark` tinyint(1) DEFAULT NULL,
+  `environment` enum('A1','B1','C1','C2','D1','D2','E1','E2','F1','F2','1','2','3','4','5','6','7','8','Z9') DEFAULT NULL,
+  `gdp` int DEFAULT NULL,
+  `crime` int DEFAULT NULL,
+  `postcode` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `timeid` (`timeID`),
   KEY `locationid` (`locationID`),
@@ -139,6 +138,11 @@ CREATE TABLE IF NOT EXISTS house.`Sales_old` (
   `types` enum('D','S','T','F','O') DEFAULT NULL,
   `age` enum('Y','N') DEFAULT NULL,
   `duration` enum('F','L') DEFAULT NULL,
+  `isPark` tinyint(1) DEFAULT NULL,
+  `environment` enum('A1','B1','C1','C2','D1','D2','E1','E2','F1','F2','1','2','3','4','5','6','7','8','Z9') DEFAULT NULL,
+  `gdp` int DEFAULT NULL,
+  `crime` int DEFAULT NULL,
+  `postcode` varchar(8) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `timeid` (`timeID`),
   KEY `locationid` (`locationID`),
@@ -146,12 +150,14 @@ CREATE TABLE IF NOT EXISTS house.`Sales_old` (
   CONSTRAINT `Sales_ibfk_4` FOREIGN KEY (`locationID`) REFERENCES `Locations` (`locationID`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-
-
+set @d = (select min(dates) from test3.raw_house);
+call test3.generateTimes(@d);
 
 """
 
 sql_fill_lookup = """
+update test3.lookup set postcode = replace(postcode,' ','');
+
 update test3.lookup set isPark = case when park in ('E99999999', 'W31000001', 'S99999999') then 0 else 1 end;
 
 update test3.lookup set country = 
@@ -162,34 +168,39 @@ update test3.lookup set country =
 		when left(oa11, 1) = 'L' then 'CHANNEL ISLANDS'
 		when left(oa11, 1) = 'M' then 'ISLE OF MAN' end;
 
+update test3.lookup set sector = left(postcode, length(postcode)-2);
 """
 
-sql_fill_wh = """
-set @d = (select min(dates) from test3.raw_house);
-call test3.generateTimes(@d);
+def sql_fill_wh(year): 
+  table = "Sales" if year >= 2011 else "Sales_old"
+  return """
+    insert ignore into test3.house_tmp_nopost select * from test3.house_tmp where postcode='';
+    delete from test3.house_tmp where postcode='';
+    update test3.house_tmp set sector = left(postcode, length(postcode)-2);
 
-insert into test3.house_tmp_nopost select * from test3.house_tmp where postcode='';
-delete from test3.house_tmp where postcode='';
-update test3.house_tmp set sector = left(postcode, length(postcode)-2);
+    insert ignore into house.Locations (county,district,town,sector)
+    SELECT county,district,town,sector
+    from test3.house_tmp h 
+    group by county,district,town,sector;
 
-update test3.lookup set postcode = replace(postcode,' ','');
-
-insert ignore into house.Locations (county,district,town,sector)
-SELECT county,district,town,sector
-from test3.house_tmp h 
-group by county,district,town,sector;
-
-update test3.house_tmp a, test3.crime_tmp b, test3.lookup c set a.crime = b.ct 
-where year(a.dates) = b.years and a.postcode = c.postcode and c.lsoa = b.lsoa ;
-
-"""
+    insert ignore into house.{}(id,timeID,locationID,price,types,age,duration,isPark,environment,gdp,crime,postcode)
+    select h.id, t1.timeID,l2.locationID ,h.price,h.types,h.age,h.duration,l.isPark,l.environment,g.gdp,ct.ct,h.postcode
+    from test3.house_tmp h
+      left join test3.lookup l on h.postcode = l.postcode 
+      left join test3.gdp g on year(h.dates) = g.years and l.laua = g.la_code 
+      left join crime_tmp ct on year(h.dates) = ct.years and l.lsoa = ct.lsoa 
+      left join house.Times t1 on t1.days = h.dates
+      left join house.Locations l2 on l2.sector = h.sector ;
+    """.format(table)
 
 
 def sql_move_house(year): 
   return """
+  truncate table test3.house_tmp; 
+
   insert into test3.house_tmp(id,price,dates,postcode,types,age,duration,town,district,county)
   select substring(id, 2, length(id)-2),price,dates,
     replace(postcode,' ',''),types,age,duration,town,district,county 
   from test3.raw_house
-  where dates >= '{}-01-01' and dates < '{}-01-01'
+  where dates >= '{}-01-01' and dates < '{}-01-01';
   """.format(year, year+1)

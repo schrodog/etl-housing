@@ -6,7 +6,8 @@ from airflow.operators.mysql_operator import MySqlOperator
 from lib.download import download_ppd
 import pathlib
 from lib.csv_import import import_gdp
-from sql.init_coll import sql_init_raw,sql_gdp,sql_move_house,sql_init_wh,sql_fill_wh,sql_separate_house
+from sql.init_coll import sql_init_raw,sql_gdp,sql_move_house,sql_init_wh,sql_fill_wh,sql_fill_lookup,sql_separate_house
+from sql.routine_tx import sql_init_agg
 
 DAG_DEFAULT_ARGS = {
   'owner': 'airflow',
@@ -57,14 +58,20 @@ i2 = bashop('import1', 'import.sh')
 i3 = pythonop('import_gdp', import_gdp)
 i4 = mysqlop('modify_gdp', sql_gdp)
 i5 = mysqlop('separate_house', sql_separate_house)
+i6 = mysqlop('sql_init_agg', sql_init_agg)
 
-t1 = mysqlop('move_house', sql_move_house(2011))
-t2 = mysqlop('init_wh', sql_init_wh)
-t3 = mysqlop('fill_wh', sql_fill_wh)
+t1 = mysqlop('init_wh', sql_init_wh)
+t2 = mysqlop('fill_lookup', sql_fill_lookup)
 
 
+[d1, d2] >> i1 >> i2 >> i3 >> i4 >> i5 >> i6 >> t1 >> t2
 
-[d1, d2] >> i1 >> i2 >> i3 >> i4 >> t1
+last = t2
+for year in range(1995,2021):
+  a1 = mysqlop('move_house_'+str(year), sql_move_house(year))  
+  a2 = mysqlop('fill_wh_'+str(year), sql_fill_wh(year))
+  last >> a1 >> a2
+  last = a2
 
 
 
