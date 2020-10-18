@@ -1,0 +1,20 @@
+data/*
+data2
+doc/CLUK*
+
+logs/
+airflow-webserver.pid
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# C extensions
+*.so
+
+unittests.cfg
+
+tmp/
+*.code-workspace
