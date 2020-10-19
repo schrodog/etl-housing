@@ -53,7 +53,7 @@ d2 = bashop('import', 'monthly_import.sh')
 
 s1 = mysqlop('move_old', sql_move_house(True))
 s2 = mysqlop('fill_old', sql_fill_wh(True))
-s3 = mysqlop('move_nwe', sql_move_house(False))
+s3 = mysqlop('move_new', sql_move_house(False))
 s4 = mysqlop('fill_new', sql_fill_wh(False))
 s5 = mysqlop('update_agg', sql_update_agg)
 

@@ -29,13 +29,13 @@ def sql_move_house(old=True):
   insert into test3.house_tmp(id,price,dates,postcode,types,age,duration,town,district,county)
   select substring(id, 2, length(id)-2),price,dates,
     replace(postcode,' ',''),types,age,duration,town,district,county 
-  from test3.raw_house
+  from test3.raw_latest_house
   where dates {} '2011-01-01';
   """.format(op)
 
 
 sql_init_agg = """
-CREATE TABLE house.`Monthly_sales` (
+CREATE TABLE if not exists house.`Monthly_sales` (
   `id` int(11) auto_increment,
   `year` int DEFAULT NULL,
   `month` int default null,
@@ -49,7 +49,7 @@ CREATE TABLE house.`Monthly_sales` (
   CONSTRAINT `Sales_ibfk_5` FOREIGN KEY (`locationID`) REFERENCES `Locations` (`locationID`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
-CREATE TABLE house.`Yearly_sales` (
+CREATE TABLE if not exists house.`Yearly_sales` (
   `id` int(11) auto_increment,
   `year` int DEFAULT NULL,
   `locationID` int DEFAULT NULL,
@@ -65,6 +65,8 @@ CREATE TABLE house.`Yearly_sales` (
 """
 
 sql_update_agg = """
+truncate table house.Monthly_sales;
+
 insert into house.Monthly_sales(year,month,locationID,price,age,duration,isPark)
 select 
 	max(t.years), t.months, s.locationID, avg(price), 
@@ -75,6 +77,7 @@ from house.Sales s
 	left join house.Times t on s.timeID = t.timeID
 group by t.months, s.locationID ;
 
+truncate table house.Yearly_sales;
 insert into house.Yearly_sales(year,locationID,price,age,duration,isPark)
 select 
 	t.years, s.locationID, avg(price), 
